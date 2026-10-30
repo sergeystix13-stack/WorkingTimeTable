@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Табель</title>
+<meta name="theme-color" content="#2B3A67" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C2028" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Табель">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="pwa.css">
+</head>
+<body>
+
+<!-- ===================== Табель ===================== -->
+<main id="page-sheet" class="page">
+  <header class="topbar">
+    <button class="icon-btn" id="prev" aria-label="Предыдущий месяц">
+      <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="month-title" id="month-title" aria-label="К текущему месяцу"></button>
+    <button class="icon-btn" id="next" aria-label="Следующий месяц">
+      <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  </header>
+
+  <section class="today card" id="today-card">
+    <div class="today-head">
+      <div>
+        <div class="today-label" id="today-label"></div>
+        <div class="today-times" id="today-times"></div>
+      </div>
+      <button class="link-btn" id="to-today" hidden>К сегодняшнему дню</button>
+    </div>
+    <div class="punch">
+      <button class="btn primary" id="punch-in">Пришёл</button>
+      <button class="btn primary" id="punch-out">Ушёл</button>
+    </div>
+  </section>
+
+  <section class="stats card" id="stats">
+    <div class="stat-main">
+      <div class="stat-label">Осталось отработать</div>
+      <div class="stat-big" id="s-remaining">0:00</div>
+      <div class="stat-sub" id="s-remaining-sub"></div>
+    </div>
+    <div class="stat-grid">
+      <button class="stat stat-btn" id="stat-norm"><div class="stat-label">Норма</div><div class="stat-val" id="s-norm"></div></button>
+      <div class="stat"><div class="stat-label">Отработано</div><div class="stat-val" id="s-worked"></div></div>
+      <div class="stat"><div class="stat-label">Переработка</div><div class="stat-val over" id="s-over"></div></div>
+      <div class="stat"><div class="stat-label">Отгулов</div><div class="stat-val" id="s-off"></div></div>
+      <button class="stat stat-btn" id="stat-vac"><div class="stat-label">Отпуск, дн.</div><div class="stat-val" id="s-vac"></div></button>
+      <button class="stat stat-btn" id="export-btn"><div class="stat-label">Выгрузка</div><div class="stat-val small">Excel</div></button>
+    </div>
+  </section>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <ol class="days" id="days"></ol>
+  <p class="foot-note">Нажмите на день, чтобы ввести время или поставить отметку.</p>
+</main>
+
+<!-- ===================== Настройки ===================== -->
+<main id="page-settings" class="page" hidden>
+  <header class="topbar plain"><h1 class="page-title">Настройки</h1></header>
+
+  <section class="card form">
+    <h2 id="workday-section">Рабочий день и норма</h2>
+    <p class="hint">«По дням» — для полной ставки: всё сверх «работа + обед» за день — переработка. Для полуставки выберите долю ставки, часы в неделю или в месяц — тогда переработка считается только по итогам месяца. Отгул списывает норму одного рабочего дня.</p>
+    <label class="row"><span>Режим нормы</span>
+      <select id="set-mode">
+        <option value="day">По дням</option>
+        <option value="rate">Доля ставки</option>
+        <option value="week">Часов в неделю</option>
+        <option value="month">Часов в месяц</option>
+      </select></label>
+    <label class="row"><span>Работа в день, Ч:ММ</span><input type="text" inputmode="decimal" id="set-work" placeholder="8:00" autocomplete="off"></label>
+    <label class="row"><span>Обед, Ч:ММ</span><input type="text" inputmode="decimal" id="set-lunch" placeholder="0:30" autocomplete="off"></label>
+    <label class="row" id="row-rate"><span>Доля ставки</span><input type="text" inputmode="decimal" id="set-rate" placeholder="0,5" autocomplete="off"></label>
+    <label class="row" id="row-week"><span>Часов в неделю, Ч:ММ</span><input type="text" inputmode="decimal" id="set-week" placeholder="20:00" autocomplete="off"></label>
+    <label class="row" id="row-month"><span>Часов в месяц, Ч:ММ</span><input type="text" inputmode="decimal" id="set-month" placeholder="80:00" autocomplete="off"></label>
+    <p class="hint" id="mode-hint"></p>
+    <p class="hint" id="rules-msg"></p>
+  </section>
+
+  <section class="card form" id="vac-section">
+    <h2>Отпуск</h2>
+    <p class="hint">По ст. 115 ТК РФ — 28 дней в год, это 2,33 дня за месяц работы. Остаток месяца от 15 дней округляется до месяца. Дни «Отпуск» в табеле вычитаются сами: выходные внутри отпуска входят в него, праздники — нет.</p>
+    <label class="row"><span>Работаю с</span><input type="date" id="set-hire"></label>
+    <label class="row"><span>Дней отпуска в году</span><input type="number" inputmode="decimal" id="set-peryear" min="1" max="100" step="any"></label>
+    <label class="row"><span>Использовано до начала учёта</span><input type="number" inputmode="decimal" id="set-before" min="0" step="any"></label>
+    <label class="row"><span>Не входит в стаж, дней</span><input type="number" inputmode="numeric" id="set-excl" min="0" step="1"></label>
+    <p class="hint">Последнее поле — прогулы, отпуск по уходу за ребёнком, отпуск за свой счёт сверх 14 дней в году (ст. 121 ТК РФ). Больничные и отгулы стаж не уменьшают.</p>
+    <p class="err" id="vac-err"></p>
+    <div class="report" id="vac-report"></div>
+  </section>
+
+  <section class="card form">
+    <h2>Праздники и переносы</h2>
+    <div class="year-nav">
+      <button class="icon-btn" id="hol-prev" aria-label="Предыдущий год"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span class="year" id="hol-year"></span>
+      <button class="icon-btn" id="hol-next" aria-label="Следующий год"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <p class="hint" id="hol-hint"></p>
+    <ul class="hol-list" id="hol-list"></ul>
+    <div class="hol-add">
+      <input type="date" id="hol-date">
+      <select id="hol-kind"><option value="holiday">Праздник</option><option value="workday">Рабочий день</option></select>
+      <input type="text" id="hol-title" placeholder="Название (необязательно)">
+      <button class="btn primary" id="hol-add">Добавить</button>
+    </div>
+    <p class="err" id="hol-err"></p>
+    <button class="btn" id="hol-reset"></button>
+  </section>
+
+  <section class="card form">
+    <h2>Оформление</h2>
+    <div class="seg" id="theme-seg">
+      <button data-v="light">Светлая</button><button data-v="dark">Тёмная</button><button data-v="system">Как в системе</button>
+    </div>
+    <label class="row"><span>Шрифт заголовков</span>
+      <select id="set-font">
+        <option value="Monomakh">Мономах</option>
+        <option value="Shafarik">Шафарик</option>
+        <option value="Ruslan">Руслан</option>
+        <option value="OldStandard">Старый стандарт</option>
+        <option value="system">Обычный</option>
+      </select></label>
+  </section>
+
+  <section class="card form">
+    <h2>Данные</h2>
+    <p class="hint">Записи хранятся только на этом телефоне и сохраняются сами. При удалении приложения они пропадут — время от времени сохраняйте резервную копию.</p>
+    <div class="btn-col">
+      <button class="btn" id="backup">Сохранить резервную копию</button>
+      <button class="btn" id="restore">Восстановить из копии</button>
+    </div>
+  </section>
+  <p class="foot-note">Табель 1.1</p>
+</main>
+
+<!-- ===================== Нижнее меню ===================== -->
+<nav class="tabbar">
+  <button data-page="sheet" class="active">
+    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+    <span>Табель</span></button>
+  <button data-page="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    <span>Настройки</span></button>
+</nav>
+
+<!-- ===================== Редактор дня ===================== -->
+<div class="backdrop" id="backdrop" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
+  <div class="grip"></div>
+  <h2 class="sheet-title" id="ed-title"></h2>
+  <p class="sheet-sub" id="ed-sub"></p>
+  <div class="times" id="ed-times">
+    <label><span>Приход</span><input type="time" id="ed-in" step="60"></label>
+    <label><span>Уход</span><input type="time" id="ed-out" step="60"></label>
+  </div>
+  <div class="now-row" id="ed-now">
+    <button class="link-btn" id="ed-in-now">Приход — сейчас</button>
+    <button class="link-btn" id="ed-out-now">Уход — сейчас</button>
+  </div>
+  <div class="ed-result" id="ed-result"></div>
+  <div class="label-sm">Отметка</div>
+  <div class="chips" id="ed-marks"></div>
+  <p class="err" id="ed-err"></p>
+  <div class="sheet-actions">
+    <button class="btn" id="ed-clear">Очистить день</button>
+    <button class="btn primary" id="ed-done">Готово</button>
+  </div>
+</section>
+
+<!-- ===================== Окна ===================== -->
+<section class="modal" id="modal" hidden role="alertdialog">
+  <div class="modal-figure" id="modal-figure"></div>
+  <h2 id="modal-title"></h2>
+  <p id="modal-text"></p>
+  <input type="text" inputmode="decimal" id="modal-input" class="modal-input" autocomplete="off" hidden>
+  <div class="modal-actions" id="modal-actions"></div>
+</section>
+<div class="toast" id="toast" hidden></div>
+
+<script src="calc.js"></script>
+<script src="xlsx.js"></script>
+<script src="app.js"></script>
+<script src="install-hint.js"></script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
+</body>
+</html>

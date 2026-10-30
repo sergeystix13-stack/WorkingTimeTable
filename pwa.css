@@ -1,0 +1,32 @@
+/* Дополнения для веб-версии (iPhone и браузер): системные отступы и шапка под строкой состояния. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --header-bg: #2B3A67; --header-ink: #FFFFFF;
+}
+:root[data-theme="dark"] { --header-bg: #1C2028; --header-ink: #E4E7EE; }
+
+/* Шапка заезжает под строку состояния и Dynamic Island — поэтому она цветная, а текст в ней светлый */
+.topbar {
+  margin: 0 -12px; padding: var(--safe-top) 12px 0; height: calc(60px + var(--safe-top));
+  background: var(--header-bg); color: var(--header-ink);
+}
+.topbar .icon-btn { color: var(--header-ink); }
+.topbar .icon-btn:active { background: rgba(255, 255, 255, .15); }
+.page { padding-bottom: calc(var(--tabbar) + var(--safe-bottom) + 24px); }
+.tabbar { height: calc(var(--tabbar) + var(--safe-bottom)); padding-bottom: var(--safe-bottom); }
+.toast { bottom: calc(var(--tabbar) + var(--safe-bottom) + 16px); }
+.sheet { padding-bottom: calc(16px + var(--safe-bottom)); }
+.today:first-of-type, .install + .today { margin-top: 12px; }
+
+/* iPhone увеличивает страницу, если шрифт поля меньше 16 px — не даём */
+input, select { font-size: 16px; }
+.hol-add input, .hol-add select { font-size: 16px; }
+
+/* Подсказка «как установить» (только в Safari, пока не добавлено на экран «Домой») */
+.install {
+  margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft);
+  color: var(--ink); font-size: 14px; line-height: 1.4;
+}
+.install b { color: var(--accent); }
+.install .close { float: right; color: var(--muted); font-weight: 700; padding: 0 0 6px 10px; }
