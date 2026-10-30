@@ -1,8 +1,8 @@
 // Офлайн-режим: после первого открытия приложение работает без интернета.
 // При обновлении сайта меняется VERSION — телефон скачает новые файлы при следующем запуске с интернетом.
-const VERSION = "7ef207511c";
+const VERSION = "4778804631";
 const CACHE = "tabel-" + VERSION;
-const FILES = ["./", "app.css", "app.js", "calc.js", "fonts/Monomakh-Regular.ttf", "fonts/OldStandard-Bold.ttf", "fonts/RuslanDisplay-Regular.ttf", "fonts/Shafarik-Regular.ttf", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "index.html", "install-hint.js", "manifest.webmanifest", "pwa.css", "xlsx.js"];
+const FILES = ["./", "app.css", "app.js", "calc.js", "fonts/Monomakh-Regular.ttf", "fonts/OldStandard-Bold.ttf", "fonts/RuslanDisplay-Regular.ttf", "fonts/Shafarik-Regular.ttf", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "index.html", "install-hint.js", "manifest.webmanifest", "planner.js", "pwa.css", "sw-register.js", "sync.js", "xlsx.js"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Табель</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#2B3A67" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1C2028" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -135,14 +137,40 @@
   </section>
 
   <section class="card form">
-    <h2>Данные</h2>
-    <p class="hint">Записи хранятся только на этом телефоне и сохраняются сами. При удалении приложения они пропадут — время от времени сохраняйте резервную копию.</p>
+    <h2>Данные и синхронизация с ПК</h2>
+    <p class="hint">Записи хранятся только на этом телефоне. Файл ниже — это и резервная копия, и способ синхронизации с программой на компьютере: отправьте его себе (Telegram, почта) и загрузите в программе, и наоборот. При загрузке данные объединяются — по каждому дню остаётся более поздняя правка.</p>
     <div class="btn-col">
-      <button class="btn" id="backup">Сохранить резервную копию</button>
-      <button class="btn" id="restore">Восстановить из копии</button>
+      <button class="btn" id="backup">Сохранить файл (для ПК и копии)</button>
+      <button class="btn" id="restore">Загрузить файл (с ПК или из копии)</button>
     </div>
   </section>
-  <p class="foot-note">Табель 1.1</p>
+  <p class="foot-note">Табель 1.3</p>
+</main>
+
+<!-- ===================== Планировщик отпуска ===================== -->
+<main id="page-plan" class="page" hidden>
+  <header class="topbar plain"><h1 class="page-title">Отпуск</h1></header>
+
+  <section class="card form">
+    <h2>Когда выгоднее взять отпуск</h2>
+    <p class="hint">Программа подберёт периоды на 12 месяцев вперёд: отпуск начинается и заканчивается в рабочий день, а выходные и праздники вокруг добавляют отдых. Праздники в счёт отпуска не входят (ст. 120 ТК РФ).</p>
+    <label class="row"><span>Сколько дней распределить</span><input type="number" inputmode="numeric" id="pl-budget" min="1" max="200" step="1"></label>
+    <div class="row"><span>За один раз, дней</span>
+      <span class="pair"><input type="number" inputmode="numeric" id="pl-min" min="1" max="60" step="1" aria-label="от"><i>–</i><input type="number" inputmode="numeric" id="pl-max" min="1" max="60" step="1" aria-label="до"></span></div>
+    <div class="seg two" id="pl-priority">
+      <button data-v="rest">Больше отдыха</button><button data-v="money">Больше денег</button>
+    </div>
+    <label class="row"><span>Оклад, ₽ в месяц</span><input type="number" inputmode="numeric" id="pl-salary" min="0" step="100" placeholder="не обязательно"></label>
+    <label class="row"><span>Средний дневной заработок, ₽</span><input type="number" inputmode="decimal" id="pl-avg" min="0" step="any" placeholder="оклад ÷ 29,3"></label>
+    <label class="row check"><span>Одна часть не меньше 14 дней (ст. 125 ТК РФ)</span><input type="checkbox" id="pl-14"></label>
+    <p class="hint" id="pl-hint"></p>
+  </section>
+
+  <section class="card plan-summary" id="pl-summary"></section>
+  <ol class="plan-list" id="pl-list"></ol>
+  <h2 class="section-title" id="pl-alt-title">Ещё хорошие периоды</h2>
+  <ol class="plan-list" id="pl-alts"></ol>
+  <p class="foot-note">Расчёт — подсказка: отпуск согласуется с работодателем по графику отпусков. Деньги — примерно: без премий, надбавок и районного коэффициента.</p>
 </main>
 
 <!-- ===================== Нижнее меню ===================== -->
@@ -150,6 +178,9 @@
   <button data-page="sheet" class="active">
     <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
     <span>Табель</span></button>
+  <button data-page="plan">
+    <svg viewBox="0 0 24 24"><path d="M3 20h18M5 20c0-6 3-11 7-11s7 5 7 11M12 9V4M9 5.5l3-1.5 3 1.5"/></svg>
+    <span>Отпуск</span></button>
   <button data-page="settings">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
     <span>Настройки</span></button>
@@ -190,9 +221,11 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="calc.js"></script>
+<script src="sync.js"></script>
+<script src="planner.js"></script>
 <script src="xlsx.js"></script>
 <script src="app.js"></script>
 <script src="install-hint.js"></script>
-<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
+<script src="sw-register.js"></script>
 </body>
 </html>

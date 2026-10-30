@@ -116,7 +116,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 /* ---------- нижнее меню ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; height: var(--tabbar);
-  display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--surface); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .tabbar button { display: grid; place-items: center; align-content: center; gap: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
@@ -224,3 +224,31 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   background: var(--surface-2); font-size: 22px; font-weight: 700; text-align: center;
 }
 .modal-input.bad { border-color: var(--under); background: var(--under-soft); }
+
+/* ---------- планировщик отпуска ---------- */
+.row .pair { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; width: 46%; max-width: 190px; }
+.row .pair input { flex: 1 1 0; width: auto; max-width: none; min-width: 0; height: 42px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface-2); padding: 0 8px; font-size: 16px; text-align: center; }
+.row .pair i { color: var(--muted); font-style: normal; }
+.row.check input { width: 26px; height: 26px; flex: 0 0 auto; accent-color: var(--accent); }
+.seg.two { grid-template-columns: 1fr 1fr; margin: 10px 0 6px; }
+.plan-summary .big { font: 700 30px/1.1 var(--display); color: var(--accent); }
+.plan-summary p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.plan-summary .money-total { color: var(--ink); font-weight: 600; }
+.plan-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.pl-item { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; }
+.pl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.pl-dates { font: 700 20px/1.2 var(--display); min-width: 0; }
+.pl-ratio { font-weight: 800; font-size: 15px; color: var(--accent); background: var(--accent-soft);
+  border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.pl-line { font-size: 14px; margin-top: 4px; }
+.pl-line b { font-variant-numeric: tabular-nums; }
+.pl-money { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.pl-money .plus { color: var(--accent); font-weight: 700; }
+.pl-money .minus { color: var(--under); font-weight: 700; }
+.pl-item .btn { width: 100%; margin-top: 10px; min-height: 40px; font-size: 15px; }
+.pl-item.done { opacity: .75; }
+.pl-tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--over); background: var(--over-soft);
+  border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
+.section-title { font: 700 19px/1.2 var(--display); margin: 18px 2px 0; }
+.section-title[hidden] { display: none; }

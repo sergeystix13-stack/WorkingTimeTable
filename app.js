@@ -11,24 +11,18 @@
   const $ = id => document.getElementById(id);
 
   // =============================================================== данные
-  const DEFAULTS = () => ({
-    version: 1, days: {}, special: {}, seeded: {}, notified: {}, monthNorms: {},
-    settings: { workMin: 480, lunchMin: 30, normMode: "day", rate: 0.5, weekMin: 1200, monthMin: 4800,
-      hireDate: "", perYear: 28, usedBefore: 0, excluded: 0, theme: "system", font: "Monomakh" },
-  });
+  // Формат данных и их проверка — в sync.js (общий с программой для ПК)
+  const DEFAULTS = () => Sync.sanitize({ days: {} });
   let data = DEFAULTS();
 
   function load() {
     let raw = null;
     try { raw = bridge ? bridge.load() : localStorage.getItem("tabel"); } catch (e) { raw = null; }
     if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        data = Object.assign(DEFAULTS(), parsed);
-        data.settings = Object.assign(DEFAULTS().settings, parsed.settings || {});
-      } catch (e) { data = DEFAULTS(); }
+      try { data = Sync.sanitize(JSON.parse(raw)); } catch (e) { data = DEFAULTS(); }
     }
   }
+  const touchSettings = () => { data.settingsT = Date.now(); };
   function save() {
     const json = JSON.stringify(data);
     try { if (bridge) bridge.save(json); else localStorage.setItem("tabel", json); }
@@ -54,12 +48,15 @@
   }
   const monthRecords = (y, m) => {
     const pre = `${y}-${String(m).padStart(2, "0")}-`, out = {};
-    for (const [d, r] of Object.entries(data.days)) if (d.startsWith(pre)) out[d] = r;
+    for (const [d, r] of Object.entries(data.days)) if (d.startsWith(pre) && (r.in || r.out || r.mark)) out[d] = r;
     return out;
   };
+  // Каждая правка дня запоминает время (t) — по нему объединяются данные с ПК.
+  // Очищенный день остаётся пустой записью, чтобы очистка тоже переехала на ПК.
   function setDay(day, rec) {
-    if (!rec.in && !rec.out && !rec.mark) delete data.days[day];
-    else data.days[day] = { in: rec.in || "", out: rec.out || "", mark: rec.mark || "" };
+    const empty = !rec.in && !rec.out && !rec.mark;
+    if (empty && !data.days[day]) return;
+    data.days[day] = { in: rec.in || "", out: rec.out || "", mark: rec.mark || "", t: Date.now() };
     save();
   }
   const vacationDates = () => Object.entries(data.days).filter(([, r]) => r.mark === "vacation").map(([d]) => d);
@@ -459,6 +456,7 @@
       next = C.makeRules(w, l, mode, rate, week, month);
       C.validateRules(next);
     } catch (e) { $("rules-msg").textContent = e.message; $("rules-msg").style.color = "var(--under)"; return; }
+    touchSettings();
     Object.assign(s, { workMin: next.workMin, lunchMin: next.lunchMin, normMode: next.mode,
       rate: next.rate, weekMin: next.weekMin, monthMin: next.monthMin });
     save();
@@ -489,6 +487,7 @@
       buttons: [{ label: "Отмена", value: false }, { label: "Сохранить", primary: true, value: "input" }],
     });
     if (value === false || value === null || value === undefined) return;
+    touchSettings();
     if (value === "") delete data.monthNorms[key];
     else data.monthNorms[key] = value;
     save();
@@ -510,6 +509,7 @@
       const before = num("set-before", "Использовано до начала учёта", 0, 10000);
       const excl = Math.round(num("set-excl", "Не входит в стаж", 0, 10000));
       Object.assign(s, { hireDate: hire, perYear, usedBefore: before, excluded: excl });
+      touchSettings();
     } catch (e) { err.textContent = e.message; return; }
     err.textContent = "";
     save();
@@ -625,8 +625,9 @@
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
   }
   function backup() {
-    const bytes = new TextEncoder().encode(JSON.stringify(data, null, 1));
-    saveFile(`Табель_копия_${C.todayISO()}.json`, "application/json", bytes);
+    const out = Object.assign({}, data, { exported: Date.now() });
+    const bytes = new TextEncoder().encode(JSON.stringify(out, null, 1));
+    saveFile(`Табель_${C.todayISO()}.json`, "application/json", bytes);
   }
   function restore() {
     if (bridge && bridge.openFile) { bridge.openFile("*/*"); return; }
@@ -635,25 +636,199 @@
     inp.onchange = () => inp.files[0] && inp.files[0].text().then(window.onFileOpened);
     inp.click();
   }
+  // Файл с ПК или резервная копия: объединить (по дням побеждает более поздняя правка) или заменить всё
   window.onFileOpened = async text => {
-    let parsed;
-    try { parsed = JSON.parse(text); if (!parsed || typeof parsed.days !== "object") throw new Error(); }
-    catch (e) { toast("Это не резервная копия Табеля"); return; }
-    const n = Object.keys(parsed.days).length;
-    if (!(await confirmBox("Восстановить копию?", `В копии ${n} ${C.plural(n, "запись", "записи", "записей")}. Все текущие данные на телефоне будут заменены.`, "Восстановить"))) return;
-    data = Object.assign(DEFAULTS(), parsed);
-    data.settings = Object.assign(DEFAULTS().settings, parsed.settings || {});
+    let incoming;
+    try {
+      if (typeof text !== "string" || text.length > 20000000) throw new Sync.SyncError("Файл слишком большой.");
+      incoming = Sync.sanitize(JSON.parse(text.replace(/^\uFEFF/, "")));
+    } catch (e) { toast(e instanceof Sync.SyncError ? e.message : "Это не файл Табеля"); return; }
+    const { data: merged, stats } = Sync.merge(data, incoming);
+    const n = Object.values(incoming.days).filter(r => r.in || r.out || r.mark).length;
+    const choice = await modal({
+      title: "Загрузить данные?",
+      text: `В файле ${n} ${C.plural(n, "заполненный день", "заполненных дня", "заполненных дней")}.\n\n` +
+        `«Объединить» — добавить новое и обновить изменённое (по каждому дню остаётся более поздняя правка): ${Sync.statsText(stats)}.\n\n` +
+        "«Заменить всё» — стереть данные на телефоне и взять всё из файла.",
+      buttons: [{ label: "Отмена", value: false }, { label: "Заменить всё", value: "replace" },
+        { label: "Объединить", primary: true, value: "merge" }],
+    });
+    if (choice !== "merge" && choice !== "replace") return;
+    if (choice === "replace" && !(await confirmBox("Заменить всё?", "Все записи на телефоне будут заменены данными из файла.", "Заменить"))) return;
+    const keep = { theme: data.settings.theme, font: data.settings.font };   // тема и шрифт — свои
+    data = choice === "merge" ? merged : incoming;
+    Object.assign(data.settings, keep);
     save(); applyTheme(); applyFont(); renderSettings(); renderSheet();
-    toast("Данные восстановлены");
+    toast(choice === "merge" ? "Объединено: " + Sync.statsText(stats) : "Данные заменены");
   };
+
+  // =============================================================== планировщик отпуска
+  // Настройки планировщика и оклад — только на этом устройстве (не в файле синхронизации).
+  const PL_KEY = "tabel-planner";
+  const plDefaults = () => ({ budget: null, min: 3, max: 14, priority: "rest", need14: true, salary: 0, avg: 0 });
+  let pl = plDefaults();
+  function plLoad() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PL_KEY) || "{}");
+      const n = (v, lo, hi, d) => (typeof v === "number" && isFinite(v) && v >= lo && v <= hi ? v : d);
+      pl = {
+        budget: raw.budget === null ? null : n(raw.budget, 1, 200, null),
+        min: n(raw.min, 1, 60, 3), max: n(raw.max, 1, 60, 14),
+        priority: raw.priority === "money" ? "money" : "rest", need14: raw.need14 !== false,
+        salary: n(raw.salary, 0, 1e8, 0), avg: n(raw.avg, 0, 1e7, 0),
+      };
+    } catch (e) { pl = plDefaults(); }
+  }
+  function plSave() { try { localStorage.setItem(PL_KEY, JSON.stringify(pl)); } catch (e) { /* ок */ } }
+
+  const fmtRub = v => {
+    const s = String(Math.abs(Math.round(v))).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+    return (v < 0 ? "−" : "") + s + "\u00a0₽";
+  };
+  function fmtRange(a, b) {
+    const pa = C.parts(a), pb = C.parts(b);
+    if (a === b) return `${pa.d} ${C.MONTHS_GEN[pa.m - 1]} ${pa.y}`;
+    if (pa.y === pb.y && pa.m === pb.m) return `${pa.d}–${pb.d} ${C.MONTHS_GEN[pa.m - 1]} ${pa.y}`;
+    if (pa.y === pb.y) return `${pa.d} ${C.MONTHS_GEN[pa.m - 1]} – ${pb.d} ${C.MONTHS_GEN[pb.m - 1]} ${pa.y}`;
+    return `${pa.d} ${C.MONTHS_GEN[pa.m - 1]} ${pa.y} – ${pb.d} ${C.MONTHS_GEN[pb.m - 1]} ${pb.y}`;
+  }
+  function fmtShort(a, b) {
+    const pa = C.parts(a), pb = C.parts(b);
+    if (pa.m === pb.m && pa.y === pb.y) return `${pa.d}–${pb.d} ${C.MONTHS_GEN[pa.m - 1]}`;
+    return `${pa.d} ${C.MONTHS_GEN[pa.m - 1]} – ${pb.d} ${C.MONTHS_GEN[pb.m - 1]}`;
+  }
+  // Календарь для планирования: свои особые дни + праздники ТК для лет, которые ещё не заполнены
+  function planSpecial(years) {
+    for (const y of years) ensureSeeded(y);
+    const out = {};
+    for (const y of years) {
+      if (!data.seeded[y]) for (const [d, k] of C.defaultSpecialDays(y)) out[d] = k;
+    }
+    return Object.assign(out, specialKinds());
+  }
+  function availableDays() {
+    const st = vacStatus();
+    return st.configured ? Math.max(0, Math.floor(st.available)) : 28;
+  }
+
+  function renderPlanner() {
+    const today = C.todayISO();
+    const y = C.parts(today).y;
+    const special = planSpecial([y, y + 1]);
+    const busy = new Set(Object.entries(data.days).filter(([, r]) => r.mark).map(([d]) => d));
+    const budget = pl.budget === null ? availableDays() : pl.budget;
+    $("pl-budget").value = budget;
+    $("pl-min").value = pl.min; $("pl-max").value = Math.max(pl.min, pl.max);
+    $("pl-salary").value = pl.salary || "";
+    $("pl-avg").value = pl.avg || "";
+    $("pl-14").checked = pl.need14;
+    for (const b of $("pl-priority").children) b.classList.toggle("on", b.dataset.v === pl.priority);
+    const salary = pl.salary > 0 ? pl.salary : null;
+    const hints = [];
+    if (pl.budget === null) hints.push(vacStatus().configured ? "Число дней — ваш остаток отпуска из счётчика." :
+      "Укажите в «Настройках» дату начала работы — и здесь будет ваш остаток отпуска; пока взято 28.");
+    if (pl.priority === "money") {
+      hints.push(salary ? "По деньгам выгоднее брать отпуск целыми неделями в месяцы, где больше рабочих дней: план строится из периодов от 7 дней, остаток — короткими."
+        : "Чтобы считать деньги, укажите оклад. Пока план — по отдыху.");
+    }
+    $("pl-hint").textContent = hints.join(" ");
+
+    const r = Planner.planVacation(today, special, budget, pl.min, Math.max(pl.min, pl.max), pl.priority, pl.need14,
+      busy, salary, pl.avg > 0 ? pl.avg : null);
+    // --- итог ---
+    const sum = $("pl-summary");
+    sum.textContent = "";
+    const charged = r.plan.reduce((a, b) => a + b.charged, 0);
+    const rest = r.plan.reduce((a, b) => a + b.rest, 0);
+    if (!r.plan.length) {
+      sum.appendChild(el("div", "big", "Нет подходящих периодов"));
+      sum.appendChild(el("p", "", budget < pl.min ? `Дней меньше, чем «за один раз от ${pl.min}». Уменьшите минимум.` :
+        "Попробуйте изменить «за один раз» или число дней."));
+    } else {
+      sum.appendChild(el("div", "big", `${charged} ${C.plural(charged, "день", "дня", "дней")} отпуска → ${rest} ${C.plural(rest, "день", "дня", "дней")} отдыха`));
+      sum.appendChild(el("p", "", `${r.plan.length} ${C.plural(r.plan.length, "часть", "части", "частей")}, в среднем ×${(rest / charged).toFixed(1).replace(".", ",")}` +
+        (r.left ? `. Не распределено: ${r.left} ${C.plural(r.left, "день", "дня", "дней")} — добавьте к любой части или возьмите позже.` : ".")));
+      if (salary) {
+        const d = r.plan.reduce((a, b) => a + b.delta, 0);
+        const p = el("p", "money-total", `Доход месяцев с отпуском изменится всего на ${d >= 0 ? "+" : ""}${fmtRub(d)}`);
+        sum.appendChild(p);
+      }
+    }
+    // --- списки ---
+    const fill = (list, items, isPlan) => {
+      list.textContent = "";
+      items.forEach(b => list.appendChild(planItem(b, isPlan)));
+    };
+    fill($("pl-list"), r.plan, true);
+    fill($("pl-alts"), r.alternatives, false);
+    $("pl-alt-title").hidden = !r.alternatives.length;
+  }
+
+  function planItem(b, isPlan) {
+    const li = el("li", "pl-item");
+    const head = el("div", "pl-head");
+    const dates = el("div", "pl-dates", fmtRange(b.start, b.end));
+    if (b.charged >= 14 && isPlan) dates.appendChild(el("span", "pl-tag", "основная часть"));
+    head.append(dates, el("span", "pl-ratio", "×" + b.ratio.toFixed(1).replace(".", ",")));
+    const line = el("div", "pl-line");
+    line.append(el("b", "", `${b.charged} ${C.plural(b.charged, "день", "дня", "дней")} отпуска`), " → ",
+      el("b", "", `${b.rest} ${C.plural(b.rest, "день", "дня", "дней")} отдыха`),
+      b.rest > b.charged ? ` (${fmtShort(b.restStart, b.restEnd)})` : "");
+    li.append(head, line);
+    if (b.delta !== null) {
+      const m = el("div", "pl-money");
+      m.append(`Отпускные ≈ ${fmtRub(b.vacPay)}, зарплата меньше на ${fmtRub(b.lost)} → `,
+        el("span", b.delta >= 0 ? "plus" : "minus", `${b.delta >= 0 ? "+" : ""}${fmtRub(b.delta)}`), " к доходу");
+      li.appendChild(m);
+    }
+    const btn = el("button", "btn" + (isPlan ? " primary" : ""), "Отметить в табеле");
+    btn.addEventListener("click", () => markVacation(b));
+    li.appendChild(btn);
+    return li;
+  }
+
+  async function markVacation(b) {
+    const days = [];
+    const sp = planSpecial([C.parts(b.start).y, C.parts(b.end).y]);
+    for (let d = b.start; C.diffDays(b.end, d) >= 0; d = C.addDays(d, 1)) {
+      if (C.dayType(d, sp) === C.DAY.WORK) days.push(d);
+    }
+    const withTime = days.filter(d => data.days[d] && (data.days[d].in || data.days[d].out));
+    const ok = await confirmBox("Отметить отпуск?",
+      `${fmtRange(b.start, b.end)}: ${b.charged} ${C.plural(b.charged, "день", "дня", "дней")} отпуска. ` +
+      `В табеле на рабочие дни встанет отметка «Отпуск», остаток отпуска пересчитается.` +
+      (withTime.length ? ` На ${withTime.length} ${C.plural(withTime.length, "день", "дня", "дней")} уже введено время — оно будет удалено.` : ""),
+      "Отметить");
+    if (!ok) return;
+    for (const d of days) setDay(d, { in: "", out: "", mark: "vacation" });
+    if (pl.budget !== null) { pl.budget = Math.max(0, pl.budget - b.charged); plSave(); }
+    renderPlanner();
+    toast("Отпуск отмечен в табеле");
+  }
+
+  function plRead() {
+    const num = (id, lo, hi) => { const v = Number(($(id).value || "").replace(",", ".")); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null; };
+    const budget = num("pl-budget", 0, 200);
+    const avail = availableDays();
+    pl.budget = budget === null || budget === avail ? null : Math.floor(budget);
+    pl.min = Math.floor(num("pl-min", 1, 60) || 1);
+    pl.max = Math.max(pl.min, Math.floor(num("pl-max", 1, 60) || pl.min));
+    pl.salary = Math.floor(num("pl-salary", 0, 1e8) || 0);
+    pl.avg = num("pl-avg", 0, 1e7) || 0;
+    pl.need14 = $("pl-14").checked;
+    plSave();
+    renderPlanner();
+  }
 
   // =============================================================== навигация
   function showPage(page) {
     view.page = page;
     $("page-sheet").hidden = page !== "sheet";
     $("page-settings").hidden = page !== "settings";
+    $("page-plan").hidden = page !== "plan";
     for (const b of document.querySelectorAll(".tabbar button")) b.classList.toggle("active", b.dataset.page === page);
     if (page === "settings") { holView.y = view.y; renderSettings(); }
+    else if (page === "plan") renderPlanner();
     else renderSheet();
     window.scrollTo(0, 0);
   }
@@ -670,6 +845,7 @@
   // =============================================================== запуск
   function init() {
     load();
+    plLoad();
     // Веб-версия: попросить браузер не очищать данные приложения
     if (!bridge && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     applyTheme(); applyFont();
@@ -708,6 +884,10 @@
     }
     $("set-font").addEventListener("change", () => { data.settings.font = $("set-font").value; save(); applyFont(); });
     $("backup").addEventListener("click", backup);
+    for (const id of ["pl-budget", "pl-min", "pl-max", "pl-salary", "pl-avg", "pl-14"]) $(id).addEventListener("change", plRead);
+    for (const b of $("pl-priority").children) {
+      b.addEventListener("click", () => { pl.priority = b.dataset.v; plSave(); renderPlanner(); });
+    }
     $("restore").addEventListener("click", restore);
     if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 
